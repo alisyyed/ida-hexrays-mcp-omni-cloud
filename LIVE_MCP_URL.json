@@ -1,7 +1,7 @@
 {
-  "status": "BOOTING",
+  "status": "LIVE",
   "engine": "docs.hex-rays.com (IDA 9.5 Omni-Nexus)",
-  "mcp_url": "",
-  "gui_url": "",
-  "updated_at": "2026-11-11T19:08:28Z"
+  "mcp_url": "https://button-portraits-mercy-dicke.trycloudflare.com/mcp",
+  "gui_url": "https://button-portraits-mercy-dicke.trycloudflare.com/",
+  "updated_at": "2026-11-11T19:09:04Z"
 }

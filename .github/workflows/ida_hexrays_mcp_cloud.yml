@@ -1,0 +1,65 @@
+name: Hex-Rays IDA & Docs 24/7 Perpetual Cloud MCP Relay
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '35 */5 * * *'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: ida-hexrays-perpetual-relay
+  cancel-in-progress: true
+
+jobs:
+  ida-hexrays-cloud:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Boot Hex-Rays 24/7 Cloud MCP Server, Publish LIVE_MCP_URL.json & Keep Alive (5h Window)
+        env:
+          RUNNER_TRACKING_ID: ""
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq || true
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq sqlite3 binutils gcc unzip curl || true
+          rm -f /tmp/LIVE_MCP_URL.json
+          nohup python3 -u ida_hexrays_mcp_cloud_launcher.py --port 7860 > /tmp/hexrays_omni.log 2>&1 &
+          echo "Waiting for Python launcher to write verified https://*.trycloudflare.com URL to /tmp/LIVE_MCP_URL.json..."
+          PUBLISHED=0
+          for i in $(seq 1 60); do
+            if [ -s /tmp/LIVE_MCP_URL.json ] && grep -q "https://" /tmp/LIVE_MCP_URL.json; then
+              git config user.name "ida-hexrays-cloud-bot"
+              git config user.email "bot@users.noreply.github.com"
+              git fetch origin main || true
+              git checkout -B main origin/main || true
+              cp /tmp/LIVE_MCP_URL.json LIVE_MCP_URL.json
+              cat LIVE_MCP_URL.json
+              git add LIVE_MCP_URL.json
+              git commit -m "Auto-update LIVE_MCP_URL.json [skip ci]" || true
+              git push origin main --force || true
+              PUBLISHED=1
+              break
+            fi
+            sleep 2
+          done
+          cat /tmp/hexrays_omni.log
+          if [ "$PUBLISHED" -eq 0 ]; then
+            echo "ERROR: Cloudflare Quick Tunnel did not publish URL within 120s"
+            exit 1
+          fi
+          echo "Hex-Rays IDA & Docs 24/7 Cloud MCP Relay is LIVE! Holding tunnel open for 5 hours..."
+          sleep 18000
+
+      - name: 3. Perpetual Self-Respawn
+        if: success() || failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sS -X POST             -H "Authorization: Bearer ${GH_TOKEN}"             -H "Accept: application/vnd.github+json"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/ida_hexrays_mcp_cloud.yml/dispatches"             -d '{"ref":"main"}' || true
